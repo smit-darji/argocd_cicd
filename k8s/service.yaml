@@ -4,9 +4,10 @@ metadata:
   name: k8s-app-service
   namespace: webapps
 spec:
+  type: NodePort
   selector:
     app: k8s-app
   ports:
     - port: 80
       targetPort: 80
-  type: NodePort
+      nodePort: 30007
