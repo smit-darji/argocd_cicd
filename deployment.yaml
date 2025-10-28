@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-web
-          image: hello-web:202510281246
+          image: hello-web:202510281256
         imagePullPolicy: Never
           ports:
             - containerPort: 80
