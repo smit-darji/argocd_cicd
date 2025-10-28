@@ -17,9 +17,9 @@ set -e  # Stop on error
 ARGOCD_NAMESPACE="argocd"
 APP_NAMESPACE="webapps"
 APP_NAME="hello-web"
-GIT_REPO_URL="https://github.com/<your-username>/k8s-webapp.git"  # <-- CHANGE THIS
+GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"  # <-- CHANGE THIS
 GIT_REPO_PATH="."   # path inside repo where k8s yaml files live (e.g. ./k8s)
-GIT_BRANCH="main"
+GIT_BRANCH="Master"
 
 echo "=========================================="
 echo "🚀 Starting ArgoCD Setup for Kubernetes CI/CD"
