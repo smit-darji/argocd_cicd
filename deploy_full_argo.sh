@@ -7,7 +7,7 @@ set -e
 # ============================================================
 
 # --- Configuration ---
-APP_NAME="k8s-app"
+APP_NAME="demo-app"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
 IMAGE_NAME="smitdarji/k8s"
