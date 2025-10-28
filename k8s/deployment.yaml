@@ -1,40 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: login
-  namespace: webapps
+  name: k8s-app
+  labels:
+    app: k8s-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: login
+      app: k8s-app
   template:
     metadata:
       labels:
-        app: login
+        app: k8s-app
     spec:
       containers:
-      - name: login
-        image: smitdarji/k8s:v0.0.10
+      - name: k8s-app
+        image: smitdarji/k8s:v1
         ports:
         - containerPort: 80
-        resources:
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
-          requests:
-            memory: "128Mi"
-            cpu: "250m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: login-service
-  namespace: webapps
-spec:
-  selector:
-    app: login
-  ports:
-  - port: 80
-    targetPort: 80
-  type: NodePort
