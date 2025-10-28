@@ -7,11 +7,11 @@ set -e
 # ============================================================
 
 # --- Configuration ---
-APP_NAME="k8s-app"
+APP_NAME="login-app"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v1"
+IMAGE_TAG="v3"
 DEPLOY_FILE="k8s/deployment.yaml"
 APP_PATH="k8s"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
@@ -34,7 +34,7 @@ kubectl create namespace ${ARGOCD_NAMESPACE} --dry-run=client -o yaml | kubectl 
 kubectl apply -n ${ARGOCD_NAMESPACE} -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 echo "⏳ Waiting for ArgoCD pods to be ready..."
-kubectl wait --for=condition=Ready pods --all -n ${ARGOCD_NAMESPACE} --timeout=300s
+kubectl wait --for=condition=Ready pods --all -n ${ARGOCD_NAMESPACE} --timeout=300s || true
 
 # --- Expose ArgoCD server ---
 echo "🌐 Exposing ArgoCD server via NodePort..."
@@ -78,9 +78,9 @@ echo "🧩 Updating image tag in ${DEPLOY_FILE}..."
 sed -i "s|image: ${IMAGE_NAME}:.*|image: ${FULL_IMAGE}|g" ${DEPLOY_FILE}
 grep "image:" ${DEPLOY_FILE}
 
-echo "🪶 Committing updated deployment file..."
+echo "🪶 Committing updated deployment/service files..."
 git add .
-git commit -m "Update image to ${FULL_IMAGE}" || echo "No changes to commit"
+git commit -m "Update image to ${FULL_IMAGE} and ensure service" || echo "No changes to commit"
 git push origin ${GIT_BRANCH}
 
 # ============================================================
@@ -116,11 +116,17 @@ spec:
 EOF
 
 # ============================================================
-# ⏳ WAIT FOR DEPLOYMENT + SHOW APP URL
+# 🕒 WAIT FOR ARGOCD SYNC + DEPLOYMENT
 # ============================================================
-echo "⏳ Waiting for deployment pods..."
-kubectl wait --for=condition=Available deployment/${APP_NAME} -n ${APP_NAMESPACE} --timeout=180s || true
+echo "⏳ Waiting for ArgoCD sync and deployment..."
+sleep 20
 
+kubectl wait --for=condition=Available deployment/${APP_NAME} -n ${APP_NAMESPACE} --timeout=300s || echo "⚠️ Deployment not yet detected — it will sync automatically."
+
+# ============================================================
+# ✅ ACCESS DETAILS + WEB UI URL
+# ============================================================
+echo ""
 echo "✅ Application deployed successfully!"
 echo ""
 echo "============================================"
@@ -132,14 +138,21 @@ echo "Username         : admin"
 echo "Password         : ${ARGOCD_PASS}"
 echo ""
 
+echo "🌐 Checking application (UI) service URL..."
 APP_URL=$(minikube service ${APP_NAME}-service -n ${APP_NAMESPACE} --url 2>/dev/null || true)
+
 if [ -n "$APP_URL" ]; then
-  echo "Web Application  : ${APP_URL}"
+  echo "============================================"
+  echo "🖥️  Web Application UI"
+  echo "--------------------------------------------"
+  echo "Open in Browser 👉  ${APP_URL}"
+  echo "============================================"
 else
   echo "⚠️  App Service not exposed yet — check using:"
   echo "   kubectl get svc -n ${APP_NAMESPACE}"
 fi
 
+echo ""
 echo "============================================"
 echo "🧠 To redeploy with new image:"
 echo "1️⃣ Update IMAGE_TAG in this script"
