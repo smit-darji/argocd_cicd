@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-APP_NAME="k8s-app"
+APP_NAME="login-page"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
 DEPLOY_FILE="k8s/deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v0.0.2"
+IMAGE_TAG="v0.0.3"
 APP_PATH="k8s"
 
 echo "🚀 Starting deployment of ${APP_NAME}..."
