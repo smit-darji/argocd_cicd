@@ -19,7 +19,7 @@ ARGOCD_NAMESPACE="argocd"
 DEPLOY_FILE="deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"   # or 'main'
-IMAGE_TAG=v1
+IMAGE_TAG="v1"
 # ------------------------------------------------
 
 echo "=========================================="
@@ -51,7 +51,17 @@ fi
 # 🌐 Step 4: Expose ArgoCD API on localhost
 echo "🌐 Exposing ArgoCD API on localhost:8080..."
 kubectl port-forward svc/argocd-server -n ${ARGOCD_NAMESPACE} 8080:443 >/dev/null 2>&1 &
-sleep 10
+
+# Wait until the API is ready
+echo "⏳ Waiting for ArgoCD API to be available..."
+for i in {1..30}; do
+  if nc -z localhost 8080 2>/dev/null; then
+    echo "✅ ArgoCD API is available on localhost:8080"
+    break
+  fi
+  sleep 2
+done
+
 
 # 🔑 Step 5: Get ArgoCD admin password
 ARGO_PWD=$(kubectl -n ${ARGOCD_NAMESPACE} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
@@ -96,7 +106,10 @@ else
 fi
 
 echo "✅ Updated deployment.yaml:"
-grep -E "image:|imagePullPolicy:" ${DEPLOY_FILE}
+echo "🧩 Updating image tag in ${DEPLOY_FILE}..."
+sed -i "s|image: ${APP_NAME}:.*|image: ${APP_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE}
+grep "image:" ${DEPLOY_FILE}
+
 
 # 🪣 Step 11: Commit and push to GitHub
 echo "🪣 Checking for Git changes..."
