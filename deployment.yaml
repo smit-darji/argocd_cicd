@@ -1,35 +1,42 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-web
-  namespace: webapps
+  name: grade-submission-api
+  namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: hello-web
+      app: grade-submission-api
   template:
     metadata:
       labels:
-        app: hello-web
+        app: grade-submission-api
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
-        - name: hello-web
-          image: hello-web:v1
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 80
+      - name: grade-submission-api
+        image: ghcr.io/rslim087a/kubernetes-cicd-tutorial:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: hello-web-service
-  namespace: webapps
+  name: grade-submission-api
+  namespace: default
 spec:
   selector:
-    app: hello-web
+    app: grade-submission-api
   ports:
-    - port: 80
-      targetPort: 80
-      protocol: TCP
-  type: NodePort
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
