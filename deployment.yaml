@@ -15,6 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-web
-          image: smitdarji/hello-web:1.0
+          image: hello-web:202510281246
+        imagePullPolicy: Never
           ports:
             - containerPort: 80

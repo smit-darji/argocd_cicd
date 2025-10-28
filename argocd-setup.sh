@@ -33,11 +33,11 @@ else
   echo "✅ Minikube already running."
 fi
 
-# 🧱 Step 2: Check namespaces
+# 🧱 Step 2: Ensure namespaces exist
 kubectl get ns ${ARGOCD_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${ARGOCD_NAMESPACE}
 kubectl get ns ${APP_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${APP_NAMESPACE}
 
-# ⚙️ Step 3: Ensure ArgoCD installed
+# ⚙️ Step 3: Install ArgoCD if not already installed
 if ! kubectl get pods -n ${ARGOCD_NAMESPACE} | grep -q argocd-server; then
   echo "📦 Installing ArgoCD..."
   kubectl apply -n ${ARGOCD_NAMESPACE} -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
@@ -47,7 +47,7 @@ else
   echo "✅ ArgoCD already installed."
 fi
 
-# 🌐 Step 4: Start port-forward in background (for CLI)
+# 🌐 Step 4: Expose ArgoCD API on localhost
 echo "🌐 Exposing ArgoCD API on localhost:8080..."
 kubectl port-forward svc/argocd-server -n ${ARGOCD_NAMESPACE} 8080:443 >/dev/null 2>&1 &
 sleep 10
@@ -61,18 +61,17 @@ if ! command -v argocd &> /dev/null; then
   echo "📦 Installing ArgoCD CLI..."
   sudo curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
   sudo chmod +x /usr/local/bin/argocd
-  echo "✅ ArgoCD CLI installed globally at /usr/local/bin/argocd"
+  echo "✅ ArgoCD CLI installed globally."
 else
   echo "✅ ArgoCD CLI already installed."
 fi
 
-
-# 🔐 Step 7: Login via CLI
+# 🔐 Step 7: Login to ArgoCD CLI
 echo "🔐 Logging into ArgoCD CLI..."
 argocd login localhost:8080 --username admin --password "${ARGO_PWD}" --insecure
 
 # 🐳 Step 8: Build Docker image inside Minikube
-echo "🐳 Building local Docker image..."
+echo "🐳 Building Docker image inside Minikube..."
 eval $(minikube docker-env)
 docker build -t ${APP_NAME}:${IMAGE_TAG} .
 
@@ -80,22 +79,39 @@ docker build -t ${APP_NAME}:${IMAGE_TAG} .
 echo "📦 Loading image into Minikube cache..."
 minikube image load ${APP_NAME}:${IMAGE_TAG}
 
-# 🧩 Step 10: Update image tag in YAML
+# 🧩 Step 10: Update image tag dynamically in YAML
 echo "🧩 Updating ${DEPLOY_FILE} with image tag ${IMAGE_TAG}..."
-sed -i "s|image: ${APP_NAME}:.*|image: ${APP_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE}
 
-# Add imagePullPolicy if missing
-if ! grep -q "imagePullPolicy" ${DEPLOY_FILE}; then
-  sed -i "/image: ${APP_NAME}:${IMAGE_TAG}/a\          imagePullPolicy: Never" ${DEPLOY_FILE}
+# Replace or insert image line safely
+if grep -q "image:" ${DEPLOY_FILE}; then
+  sed -i "s|image:.*|image: ${APP_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE}
+else
+  sed -i "/containers:/a\        image: ${APP_NAME}:${IMAGE_TAG}" ${DEPLOY_FILE}
 fi
 
-grep "image:" ${DEPLOY_FILE}
+# Ensure imagePullPolicy: Never (for local image)
+if grep -q "imagePullPolicy" ${DEPLOY_FILE}; then
+  sed -i "s|imagePullPolicy:.*|imagePullPolicy: Never|g" ${DEPLOY_FILE}
+else
+  sed -i "/image: ${APP_NAME}:${IMAGE_TAG}/a\        imagePullPolicy: Never" ${DEPLOY_FILE}
+fi
 
-# 🪣 Step 11: Commit + push to GitHub
-echo "🪣 Pushing updated tag to GitHub..."
-git add .
-git commit -m "Auto deploy ${APP_NAME}:${IMAGE_TAG}" || true
-git push
+# Remove duplicates if any
+awk '!seen[$0]++' ${DEPLOY_FILE} > tmp.yaml && mv tmp.yaml ${DEPLOY_FILE}
+
+echo "✅ Updated deployment.yaml:"
+grep -E "image:|imagePullPolicy:" ${DEPLOY_FILE}
+
+# 🪣 Step 11: Commit + push to GitHub if changes exist
+echo "🪣 Checking for Git changes..."
+if ! git diff --quiet; then
+  git add .
+  git commit -m "Auto deploy ${APP_NAME}:${IMAGE_TAG}"
+  git push origin ${GIT_BRANCH}
+  echo "✅ Changes pushed to GitHub."
+else
+  echo "ℹ️ No changes to commit."
+fi
 
 # 🚀 Step 12: Create or update ArgoCD app
 if ! argocd app get ${APP_NAME} >/dev/null 2>&1; then
@@ -110,23 +126,23 @@ else
   echo "✅ ArgoCD app ${APP_NAME} already exists."
 fi
 
-# 🔄 Step 13: Enable auto-sync
+# 🔄 Step 13: Enable auto-sync & self-heal
 argocd app set ${APP_NAME} --sync-policy automated --self-heal --auto-prune
 
-# 🌀 Step 14: Sync manually
-echo "🌀 Syncing app..."
+# 🌀 Step 14: Trigger sync manually
+echo "🌀 Syncing ArgoCD app..."
 argocd app sync ${APP_NAME}
 
-# 🕵️ Step 15: Wait for deployment
-echo "⏳ Waiting for pods in namespace ${APP_NAMESPACE}..."
+# 🕵️ Step 15: Wait for deployment to finish
+echo "⏳ Waiting for deployment rollout..."
 kubectl rollout status deployment/${APP_NAME} -n ${APP_NAMESPACE} --timeout=180s || true
 
-# 🌍 Step 16: Show URL
+# 🌍 Step 16: Show service URL
 echo "🌍 Getting service URL..."
 if kubectl get svc ${APP_NAME}-service -n ${APP_NAMESPACE} >/dev/null 2>&1; then
   minikube service ${APP_NAME}-service -n ${APP_NAMESPACE} --url
 else
-  echo "⚠️ No service found. Check Deployment YAML or ArgoCD status."
+  echo "⚠️ No service found. Check deployment or ArgoCD status."
 fi
 
 echo "=========================================="
