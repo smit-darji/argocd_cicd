@@ -8,7 +8,7 @@ DEPLOY_FILE="k8s/deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v0.0.1"
+IMAGE_TAG="v0.0.2"
 APP_PATH="k8s"
 
 echo "🚀 Starting deployment of ${APP_NAME}..."
@@ -24,7 +24,7 @@ grep "image:" ${DEPLOY_FILE}
 
 # Commit and push changes to Git
 echo "🪶 Committing updated deployment..."
-git add ${DEPLOY_FILE}
+git add ${DEPLOY_FILE} .
 git commit -m "Update image to ${IMAGE_NAME}:${IMAGE_TAG}"
 git push origin ${GIT_BRANCH}
 
