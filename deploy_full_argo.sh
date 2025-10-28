@@ -24,7 +24,7 @@ grep "image:" ${DEPLOY_FILE}
 
 # Commit and push changes to Git
 echo "🪶 Committing updated deployment..."
-git add ${DEPLOY_FILE} .
+git add .
 git commit -m "Update image to ${IMAGE_NAME}:${IMAGE_TAG}"
 git push origin ${GIT_BRANCH}
 
