@@ -7,11 +7,11 @@ set -e
 # ============================================================
 
 # --- Configuration ---
-APP_NAME="login-app"
+APP_NAME="login-page"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v3"
+IMAGE_TAG="0.0.1"
 DEPLOY_FILE="k8s/deployment.yaml"
 APP_PATH="k8s"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
