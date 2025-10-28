@@ -19,7 +19,7 @@ ARGOCD_NAMESPACE="argocd"
 DEPLOY_FILE="deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"   # or 'main'
-IMAGE_TAG=$(date +%Y%m%d%H%M)
+IMAGE_TAG=v1
 # ------------------------------------------------
 
 echo "=========================================="
