@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: login
-        image: smitdarji/k8s:v0.0.10   # auto-updated by script
+        image: smitdarji/k8s:v0.0.10
         ports:
         - containerPort: 80
         resources:
