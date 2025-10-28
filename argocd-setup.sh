@@ -59,9 +59,9 @@ grep "image:" ${DEPLOY_FILE}
 
 # 🪣 Step 6: Commit + push changes to GitHub (GitOps trigger)
 echo "🪣 Committing & pushing to GitHub..."
-git add ${DEPLOY_FILE}
+git add .
 git commit -m "Auto deploy ${APP_NAME}:${IMAGE_TAG}"
-git push origin ${GIT_BRANCH}
+git push
 
 # 🔐 Step 7: Check ArgoCD app existence
 if ! argocd app get ${APP_NAME} >/dev/null 2>&1; then
