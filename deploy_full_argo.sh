@@ -13,12 +13,12 @@ DEPLOY_FILE="k8s/deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v0.0.5"
+IMAGE_TAG="v0.0.6"
 APP_PATH="k8s"
 
 echo "🚀 Starting deployment for ${APP_NAME}..."
 
-# --- Check and start Minikube ---
+# --- Start Minikube if needed ---
 if ! minikube status >/dev/null 2>&1; then
   echo "🧩 Starting Minikube..."
   minikube start --driver=docker
@@ -34,32 +34,36 @@ if ! kubectl get ns ${ARGOCD_NAMESPACE} >/dev/null 2>&1; then
   echo "⏳ Waiting for ArgoCD pods..."
   kubectl wait --for=condition=Ready pods --all -n ${ARGOCD_NAMESPACE} --timeout=300s || true
 else
-  echo "✅ ArgoCD namespace already exists."
+  echo "✅ ArgoCD is already installed."
 fi
 
-# --- Expose ArgoCD UI ---
+# --- Expose ArgoCD Server via NodePort ---
 echo "🌐 Exposing ArgoCD server..."
 kubectl patch svc argocd-server -n ${ARGOCD_NAMESPACE} -p '{"spec": {"type": "NodePort"}}' || true
 
-# --- Build and Push Docker Image ---
+# --- Build & Push Docker image ---
 FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 echo "🐳 Building Docker image: ${FULL_IMAGE}"
 docker build -t ${FULL_IMAGE} .
-echo "📤 Pushing image..."
+echo "📤 Pushing image to Docker Hub..."
 docker push ${FULL_IMAGE}
 
-# --- Update image tag in deployment ---
+# --- Update deployment file ---
 echo "🧩 Updating image tag in ${DEPLOY_FILE}..."
 sed -i "s|image: ${IMAGE_NAME}:.*|image: ${FULL_IMAGE}|g" ${DEPLOY_FILE}
 grep "image:" ${DEPLOY_FILE}
 
-# --- Commit and push changes to Git ---
+# --- Commit & push changes to Git ---
 echo "🪶 Committing updated deployment to Git..."
 git add .
 git commit -m "Update image to ${FULL_IMAGE}" || echo "No changes to commit."
 git push origin ${GIT_BRANCH}
 
-# --- Create or update ArgoCD Application ---
+# --- Ensure Application Namespace exists ---
+echo "🏗️ Ensuring namespace ${APP_NAMESPACE} exists..."
+kubectl create namespace ${APP_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+# --- Create / Update ArgoCD Application ---
 echo "🚀 Creating/Updating ArgoCD Application..."
 cat <<EOF | kubectl apply --validate=false -f -
 apiVersion: argoproj.io/v1alpha1
@@ -84,21 +88,25 @@ spec:
       - CreateNamespace=true
 EOF
 
-# --- Wait for deployment ---
+# --- Wait and sync ---
+echo "🔄 Syncing ArgoCD Application..."
+kubectl -n ${ARGOCD_NAMESPACE} wait --for=condition=Healthy application/${APP_NAME}-app --timeout=180s || true
+kubectl -n ${ARGOCD_NAMESPACE} wait --for=condition=Synced application/${APP_NAME}-app --timeout=180s || true
+
+# --- Wait for Deployment ---
 echo "⏳ Waiting for ${APP_NAME} deployment to roll out..."
 kubectl rollout status deployment/${APP_NAME} -n ${APP_NAMESPACE} --timeout=180s || true
 
-# --- Fetch ArgoCD details ---
+# --- Gather Access Details ---
 ARGOCD_IP=$(minikube ip)
 ARGOCD_PORT=$(kubectl get svc argocd-server -n ${ARGOCD_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
 ARGOCD_PASS=$(kubectl -n ${ARGOCD_NAMESPACE} get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
 
-# --- Get App URL ---
-echo "🌐 Checking application (UI) service URL..."
+# --- Get Web App URL ---
 APP_SERVICE="${APP_NAME}-service"
 APP_URL=$(minikube service ${APP_SERVICE} -n ${APP_NAMESPACE} --url 2>/dev/null || echo "⚠️  App Service not exposed yet")
 
-# --- Final Output ---
+# --- Display Final Output ---
 echo ""
 echo "✅ Application deployed successfully!"
 echo ""
@@ -112,8 +120,8 @@ echo "Username         : admin"
 echo "Password         : ${ARGOCD_PASS}"
 echo "============================================"
 echo ""
-echo "🧠 To redeploy with new image:"
+echo "🧠 To redeploy with a new image:"
 echo "1️⃣ Update IMAGE_TAG in this script"
 echo "2️⃣ Run ./deploy_full_argo.sh"
-echo "ArgoCD auto-syncs your changes 🚀"
+echo "ArgoCD will auto-sync and redeploy 🚀"
 echo "============================================"
