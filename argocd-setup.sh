@@ -15,7 +15,7 @@ set -e  # Exit on any error
 APP_NAME="hello-web"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
-DEPLOY_FILE="k8sdeploy.yaml"
+DEPLOY_FILE="deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"   # or 'main'
 IMAGE_TAG=$(date +%Y%m%d%H%M)
