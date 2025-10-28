@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+# === CONFIG ===
 APP_NAME="login-page"
 APP_NAMESPACE="webapps"
 ARGOCD_NAMESPACE="argocd"
@@ -8,29 +9,38 @@ DEPLOY_FILE="k8s/deployment.yaml"
 GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
 GIT_BRANCH="Master"
 IMAGE_NAME="smitdarji/k8s"
-IMAGE_TAG="v0.0.3"
+IMAGE_TAG="v0.0.4"
 APP_PATH="k8s"
 
-echo "🚀 Starting deployment of ${APP_NAME}..."
+# === STEP 1: Ensure Minikube and Context ===
+echo "🚀 Checking Minikube cluster..."
+if ! minikube status >/dev/null 2>&1; then
+  echo "⚙️  Starting Minikube..."
+  minikube start
+fi
 
-# Build and push Docker image
+kubectl config use-context minikube >/dev/null 2>&1
+echo "✅ Minikube context ready!"
+
+# === STEP 2: Build & Push Docker Image ===
+echo "🐳 Building and pushing Docker image..."
 docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
 docker push ${IMAGE_NAME}:${IMAGE_TAG}
 
-# Update deployment file
+# === STEP 3: Update Deployment YAML ===
 echo "🧩 Updating image tag in ${DEPLOY_FILE}..."
 sed -i "s|image: ${IMAGE_NAME}:.*|image: ${IMAGE_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE}
 grep "image:" ${DEPLOY_FILE}
 
-# Commit and push changes to Git
-echo "🪶 Committing updated deployment..."
+# === STEP 4: Commit & Push to Git ===
+echo "🪶 Committing updated deployment to Git..."
 git add .
 git commit -m "Update image to ${IMAGE_NAME}:${IMAGE_TAG}"
 git push origin ${GIT_BRANCH}
 
-# Apply ArgoCD Application
+# === STEP 5: Apply ArgoCD Application ===
 echo "🚀 Creating/Updating ArgoCD Application..."
-cat <<EOF | kubectl apply -f -
+cat <<EOF | kubectl apply --validate=false -f -
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -53,15 +63,16 @@ spec:
       - CreateNamespace=true
 EOF
 
-# Wait for pods
-echo "⏳ Waiting for pods to be ready..."
+# === STEP 6: Wait for Pod rollout ===
+echo "⏳ Waiting for deployment rollout..."
 kubectl rollout status deployment/${APP_NAME} -n ${APP_NAMESPACE} || true
 
-# Check ArgoCD and app URLs
+# === STEP 7: Get URLs ===
 ARGOCD_IP=$(minikube ip)
 ARGOCD_PORT=$(kubectl get svc argocd-server -n ${ARGOCD_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
 ARGOCD_PASS=$(kubectl -n ${ARGOCD_NAMESPACE} get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
-APP_PORT=$(kubectl get svc k8s-app-service -n ${APP_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
+APP_SERVICE=$(kubectl get svc -n ${APP_NAMESPACE} -o jsonpath='{.items[0].metadata.name}')
+APP_PORT=$(kubectl get svc ${APP_SERVICE} -n ${APP_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
 
 echo ""
 echo "✅ Application deployed successfully!"
