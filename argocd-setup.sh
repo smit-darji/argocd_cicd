@@ -1,104 +1,102 @@
 #!/bin/bash
+# =====================================================================
+# 🚀 ArgoCD + Minikube Full Auto Deployment Script (Dynamic Build Tag)
+# =====================================================================
+# ✅ Starts Minikube
+# ✅ Ensures ArgoCD running
+# ✅ Builds local Docker image (with dynamic tag)
+# ✅ Updates Deployment YAML + pushes to GitHub
+# ✅ ArgoCD auto-syncs & deploys the app
+# =====================================================================
 
-# --------------------------------------------------------
-# 🚀 ArgoCD Setup & GitOps Deployment Script for Minikube
-# --------------------------------------------------------
-# This script will:
-# 1️⃣ Start Minikube
-# 2️⃣ Install ArgoCD
-# 3️⃣ Port-forward dashboard
-# 4️⃣ Deploy app from GitHub repo
-# 5️⃣ Enable auto-sync (CI/CD)
-# --------------------------------------------------------
+set -e  # Exit on any error
 
-set -e  # Stop on error
-
-# 🔧 CONFIGURATION
-ARGOCD_NAMESPACE="argocd"
-APP_NAMESPACE="webapps"
+# ---------------- CONFIGURATION ----------------
 APP_NAME="hello-web"
-GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"  # <-- CHANGE THIS
-GIT_REPO_PATH="."   # path inside repo where k8s yaml files live (e.g. ./k8s)
-GIT_BRANCH="Master"
+APP_NAMESPACE="webapps"
+ARGOCD_NAMESPACE="argocd"
+DEPLOY_FILE="k8sdeploy.yaml"
+GIT_REPO_URL="https://github.com/smit-darji/argocd_cicd.git"
+GIT_BRANCH="Master"   # or 'main'
+IMAGE_TAG=$(date +%Y%m%d%H%M)
+# ------------------------------------------------
 
 echo "=========================================="
-echo "🚀 Starting ArgoCD Setup for Kubernetes CI/CD"
+echo "🚀 Starting ArgoCD + WebApp Deployment"
 echo "=========================================="
 
-# 🧹 Step 1: Start Minikube
-echo "👉 Starting Minikube..."
-minikube start --driver=docker
-
-# 🧩 Step 2: Create namespaces
-echo "👉 Creating namespaces..."
-kubectl create namespace ${ARGOCD_NAMESPACE} || true
-kubectl create namespace ${APP_NAMESPACE} || true
-
-# ⚙️ Step 3: Install ArgoCD
-echo "👉 Installing ArgoCD..."
-kubectl apply -n ${ARGOCD_NAMESPACE} -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# ⏳ Wait for ArgoCD pods
-echo "⏳ Waiting for ArgoCD pods to be ready..."
-kubectl wait --for=condition=Ready pods --all -n ${ARGOCD_NAMESPACE} --timeout=180s
-
-# 🌐 Step 4: Port-forward ArgoCD dashboard (in background)
-echo "🌐 Starting ArgoCD Dashboard on https://localhost:8080 ..."
-kubectl port-forward svc/argocd-server -n ${ARGOCD_NAMESPACE} 8080:443 >/dev/null 2>&1 &
-sleep 5
-
-# 🔑 Step 5: Retrieve initial admin password
-echo "🔑 Getting ArgoCD admin password..."
-ARGO_PWD=$(kubectl -n ${ARGOCD_NAMESPACE} get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
-echo "=========================================="
-echo "ArgoCD UI: https://localhost:8080"
-echo "Username : admin"
-echo "Password : ${ARGO_PWD}"
-echo "=========================================="
-
-# 🧠 Step 6: Install ArgoCD CLI (if missing)
-if ! command -v argocd &> /dev/null; then
-  echo "📦 Installing ArgoCD CLI (user local path)..."
-  curl -sSL -o ~/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-  chmod +x ~/argocd
-  export PATH=$PATH:~
-  echo "✅ ArgoCD CLI installed at ~/argocd"
+# 🧩 Step 1: Ensure Minikube running
+if ! minikube status >/dev/null 2>&1; then
+  echo "👉 Starting Minikube..."
+  minikube start --driver=docker
 else
-  echo "✅ ArgoCD CLI already installed."
+  echo "✅ Minikube already running."
 fi
 
-# ⏳ Step 7: Wait for dashboard
-echo "⌛ Waiting for ArgoCD server to be ready..."
-sleep 20
+# 🧱 Step 2: Check namespaces
+kubectl get ns ${ARGOCD_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${ARGOCD_NAMESPACE}
+kubectl get ns ${APP_NAMESPACE} >/dev/null 2>&1 || kubectl create ns ${APP_NAMESPACE}
 
-# 🔐 Step 8: Login ArgoCD CLI
-echo "🔐 Logging into ArgoCD CLI..."
-argocd login localhost:8080 --username admin --password "${ARGO_PWD}" --insecure
+# 🐳 Step 3: Build Docker image inside Minikube
+echo "🐳 Building local Docker image..."
+eval $(minikube docker-env)
+docker build -t ${APP_NAME}:${IMAGE_TAG} .
 
-# 🚀 Step 9: Create ArgoCD Application
-echo "🚀 Creating ArgoCD application: ${APP_NAME}"
-argocd app create ${APP_NAME} \
-  --repo ${GIT_REPO_URL} \
-  --path ${GIT_REPO_PATH} \
-  --dest-server https://kubernetes.default.svc \
-  --dest-namespace ${APP_NAMESPACE} \
-  --revision ${GIT_BRANCH}
+# 📦 Step 4: Load image into Minikube (optional)
+echo "📦 Loading image into Minikube cache..."
+minikube image load ${APP_NAME}:${IMAGE_TAG}
 
-# 🔄 Step 10: Enable Auto-Sync
-echo "🔄 Enabling auto-sync for ${APP_NAME}..."
+# 🧩 Step 5: Update image tag dynamically in YAML
+echo "🧩 Updating ${DEPLOY_FILE} with image tag ${IMAGE_TAG}..."
+sed -i "s|image: ${APP_NAME}:.*|image: ${APP_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE}
+
+# Ensure imagePullPolicy Never for local Minikube usage
+if ! grep -q "imagePullPolicy" ${DEPLOY_FILE}; then
+  sed -i "/image: ${APP_NAME}:${IMAGE_TAG}/a\          imagePullPolicy: Never" ${DEPLOY_FILE}
+fi
+
+grep "image:" ${DEPLOY_FILE}
+
+# 🪣 Step 6: Commit + push changes to GitHub (GitOps trigger)
+echo "🪣 Committing & pushing to GitHub..."
+git add ${DEPLOY_FILE}
+git commit -m "Auto deploy ${APP_NAME}:${IMAGE_TAG}"
+git push origin ${GIT_BRANCH}
+
+# 🔐 Step 7: Check ArgoCD app existence
+if ! argocd app get ${APP_NAME} >/dev/null 2>&1; then
+  echo "🚀 Creating new ArgoCD app: ${APP_NAME} ..."
+  argocd app create ${APP_NAME} \
+    --repo ${GIT_REPO_URL} \
+    --path . \
+    --dest-server https://kubernetes.default.svc \
+    --dest-namespace ${APP_NAMESPACE} \
+    --revision ${GIT_BRANCH}
+else
+  echo "✅ ArgoCD app ${APP_NAME} already exists."
+fi
+
+# 🔄 Step 8: Enable auto-sync
 argocd app set ${APP_NAME} --sync-policy automated --self-heal --auto-prune
 
-# ✅ Step 11: Sync app for first deployment
-echo "✅ Syncing application..."
+# 🌀 Step 9: Sync app manually (for fresh deploy)
 argocd app sync ${APP_NAME}
 
-# 📊 Step 12: Verify deployment
-echo "📊 Checking deployed resources..."
-kubectl get all -n ${APP_NAMESPACE}
+# 🕵️ Step 10: Wait for pod rollout
+echo "⏳ Waiting for pods in namespace ${APP_NAMESPACE}..."
+kubectl rollout status deployment/${APP_NAME} -n ${APP_NAMESPACE} --timeout=120s || true
 
-echo "🎉 DONE!"
+# 🌍 Step 11: Show service URL
+echo "🌍 Checking service URL..."
+if kubectl get svc ${APP_NAME}-service -n ${APP_NAMESPACE} >/dev/null 2>&1; then
+  minikube service ${APP_NAME}-service -n ${APP_NAMESPACE} --url
+else
+  echo "⚠️ No service found — check ArgoCD or Deployment YAML."
+fi
+
 echo "=========================================="
-echo "🌐 ArgoCD Dashboard: https://localhost:8080"
-echo "🧭 App Name: ${APP_NAME}"
-echo "💾 Repo: ${GIT_REPO_URL}"
+echo "🎉 Deployment Complete!"
+echo "✅ Image Tag: ${IMAGE_TAG}"
+echo "✅ Namespace: ${APP_NAMESPACE}"
+echo "✅ ArgoCD UI: https://localhost:8080"
 echo "=========================================="
