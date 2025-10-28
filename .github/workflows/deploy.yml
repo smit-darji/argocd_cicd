@@ -1,0 +1,23 @@
+name: Deploy via ArgoCD
+
+on:
+  push:
+    branches:
+      - Master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Run deploy script
+        run: |
+          chmod +x deploy_full_argo.sh
+          ./deploy_full_argo.sh
