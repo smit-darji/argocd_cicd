@@ -15,7 +15,7 @@ APP_NAME="hello-web"
 DEPLOY_FILE="k8sdeploy.yaml"
 IMAGE_TAG=$(date +%Y%m%d%H%M)   # e.g., 202510281230 (unique tag)
 GITHUB_REPO="https://github.com/smit-darji/argocd_cicd.git"
-BRANCH="main"  # change if your repo uses 'Master'
+BRANCH="Master"  # change if your repo uses 'Master'
 # ----------------------------------------
 
 echo "🌍 Using image tag: ${IMAGE_TAG}"
@@ -38,7 +38,7 @@ sed -i "s|image: ${APP_NAME}:.*|image: ${APP_NAME}:${IMAGE_TAG}|g" ${DEPLOY_FILE
 
 grep "image:" ${DEPLOY_FILE}
 
-# 🪣 Step 5: Commit and push to GitHub (GitOps trigger)
+🪣 Step 5: Commit and push to GitHub (GitOps trigger)
 echo "🪣 Committing and pushing changes to GitHub..."
 git add ${DEPLOY_FILE}
 git commit -m "Deploy: updated ${APP_NAME} to tag ${IMAGE_TAG}"
